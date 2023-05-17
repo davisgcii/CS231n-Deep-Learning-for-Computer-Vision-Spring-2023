@@ -1,0 +1,11 @@
+# env
+venv
+
+# python
+__pycache__
+.ipynb_checkpoints
+
+# other
+*.pdf
+*.zip
+datasets/
