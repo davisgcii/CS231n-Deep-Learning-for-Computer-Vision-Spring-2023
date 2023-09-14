@@ -148,7 +148,96 @@ class CaptioningRNN:
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        # (1) Use an affine transformation to compute the initial hidden state     #
+        #     from the image features. This should produce an array of shape (N, H)#
+
+        h0, affine_cache = affine_forward(features, W_proj, b_proj)
+
+        # (2) Use a word embedding layer to transform the words in captions_in     #
+        #     from indices to vectors, giving an array of shape (N, T, W).         #
+
+        # captions_in are (N, T)
+        x, captions_cache = word_embedding_forward(captions_in, W_embed)
+
+        # (3) Use either a vanilla RNN or LSTM (depending on self.cell_type) to    #
+        #     process the sequence of input word vectors and produce hidden state  #
+        #     vectors for all timesteps, producing an array of shape (N, T, H).    #
+
+        h, rnn_cache = rnn_forward(x, h0, Wx, Wh, b)
+
+        # (4) Use a (temporal) affine transformation to compute scores over the    #
+        #     vocabulary at every timestep using the hidden states, giving an      #
+        #     array of shape (N, T, V).                                            #
+
+        # reference:
+        # def temporal_affine_forward(x, w, b):
+        # """Forward pass for a temporal affine layer.
+        
+        # The input is a set of D-dimensional
+        # vectors arranged into a minibatch of N timeseries, each of length T. We use
+        # an affine function to transform each of those vectors into a new vector of
+        # dimension M.
+
+        # Inputs:
+        # - x: Input data of shape (N, T, D)
+        # - w: Weights of shape (D, M)
+        # - b: Biases of shape (M,)
+
+        # Returns a tuple of:
+        # - out: Output data of shape (N, T, M)
+        # - cache: Values needed for the backward pass
+        # """
+
+        scores, temporal_cache = temporal_affine_forward(h, W_vocab, b_vocab)
+
+        # (5) Use (temporal) softmax to compute loss using captions_out, ignoring  #
+        #     the points where the output word is <NULL> using the mask above.     #
+
+
+        # reference:
+        # def temporal_softmax_loss(x, y, mask, verbose=False):
+        # """A temporal version of softmax loss for use in RNNs.
+        
+        # We assume that we are making predictions over a vocabulary of size V for each timestep of a
+        # timeseries of length T, over a minibatch of size N. The input x gives scores for all vocabulary
+        # elements at all timesteps, and y gives the indices of the ground-truth element at each timestep.
+        # We use a cross-entropy loss at each timestep, summing the loss over all timesteps and averaging
+        # across the minibatch.
+
+        # As an additional complication, we may want to ignore the model output at some timesteps, since
+        # sequences of different length may have been combined into a minibatch and padded with NULL
+        # tokens. The optional mask argument tells us which elements should contribute to the loss.
+
+        # Inputs:
+        # - x: Input scores, of shape (N, T, V)
+        # - y: Ground-truth indices, of shape (N, T) where each element is in the range
+        #     0 <= y[i, t] < V
+        # - mask: Boolean array of shape (N, T) where mask[i, t] tells whether or not
+        #   the scores at x[i, t] should contribute to the loss.
+
+        # Returns a tuple of:
+        # - loss: Scalar giving loss
+        # - dx: Gradient of loss with respect to scores x.
+        # """
+
+        loss, dscores = temporal_softmax_loss(scores, captions_out, mask)
+
+
+        # In the backward pass you will need to compute the gradient of the loss   #
+        # with respect to all model parameters. Use the loss and grads variables   #
+        # defined above to store loss and gradients; grads[k] should give the      #
+        # gradients for self.params[k].                                            #
+
+        dh, grads['W_vocab'], grads['b_vocab'] = temporal_affine_backward(dscores, temporal_cache)
+
+        dx, dh0, grads['Wx'], grads['Wh'], grads['b'] = rnn_backward(dh, rnn_cache)
+
+        grads['W_embed'] = word_embedding_backward(dx, captions_cache)
+
+        _, grads['W_proj'], grads['b_proj'] = affine_backward(dh0, affine_cache)
+
+
+
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -216,7 +305,46 @@ class CaptioningRNN:
         ###########################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        N, D = features.shape
+        T = max_length
+
+        word = self._start
+
+        # for reference
+        # def rnn_step_forward(x, prev_h, Wx, Wh, b):
+        # """Run the forward pass for a single timestep of a vanilla RNN using a tanh activation function.
+
+        # The input data has dimension D, the hidden state has dimension H,
+        # and the minibatch is of size N.
+
+        # Inputs:
+        # - x: Input data for this timestep, of shape (N, D)
+        # - prev_h: Hidden state from previous timestep, of shape (N, H)
+        # - Wx: Weight matrix for input-to-hidden connections, of shape (D, H)
+        # - Wh: Weight matrix for hidden-to-hidden connections, of shape (H, H)
+        # - b: Biases of shape (H,)
+
+        # Returns a tuple of:
+        # - next_h: Next hidden state, of shape (N, H)
+        # - cache: Tuple of values needed for the backward pass.
+        # """        
+
+        # create h0
+        next_h, affine_cache = affine_forward(features, W_proj, b_proj)
+
+        for i in range(T):
+          # embed the previous word
+          embedded_word = W_embed[word]
+
+          # make an RNN step to get the next hidden state
+          next_h, _ = rnn_step_forward(embedded_word, next_h, Wx, Wh, b)
+
+          # get word scores
+          word_scores = np.dot(next_h, W_vocab) + b_vocab
+
+          # choose the word with the highest score and add it to captions
+          word = np.argmax(word_scores, axis=1)
+          captions[:, i] = word
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################

@@ -34,7 +34,23 @@ def compute_saliency_maps(X, y, model):
     ##############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    # determine the prediction scores via forward pass
+    y_pred = model(X)
+
+    # get the scores for the target class
+    scores = y_pred.gather(1, y.view(-1, 1)).squeeze()  
+
+    # backpropagate and get the gradients
+    scores.backward(torch.ones_like(scores))
+
+    # per the spec: take the absolute value of the gradient, the choose the
+    # max value along the channel dimension of (N, 3, H, W)
+    saliency, indices = X.grad.data.abs().max(dim=1)
+
+    # should be of shape (N, H, W)
+    print(f"saliency shape: {saliency.size()}")
+
+    return saliency
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ##############################################################################
@@ -76,7 +92,40 @@ def make_fooling_image(X, target_y, model):
     ##############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    # start the training loop
+    iter = 0
+    while True:
+
+      # forward pass
+      y_pred = model(X_fooling)
+
+      # break if the model is fooled - will occur when the target class in y_pred
+      # has the highest score
+      if torch.argmax(y_pred) == target_y:
+        break
+
+      # otherwise, get the predicted score for the correct class; we want
+      # this to be as high as possible so we perform gradient ascent on this
+      correct_class_score = y_pred[0, target_y]
+
+      # backprop and compute gradients for X
+      correct_class_score.backward()
+      grads = X_fooling.grad
+
+      dx = learning_rate * grads / grads.norm()
+
+      # update X_fooling
+      X_fooling.data = X_fooling + dx
+
+      # zero the gradients to prevent accumulation
+      X_fooling.grad.zero_()
+
+      iter += 1
+
+      if iter % 10 == 0:
+        print(f"Loss after {iter} iterations: {correct_class_score}")
+
+
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ##############################################################################
@@ -94,7 +143,26 @@ def class_visualization_update_step(img, model, target_y, l2_reg, learning_rate)
     ########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    # copied from above
+
+    # forward pass
+    y_pred = model(img)
+
+    # get the loss; we want the correct class score to be as high as possible
+    # so subtract l2_reg from the correct class score
+    loss = y_pred[0, target_y] - img.square().sum() * l2_reg
+
+    # backprop and compute gradients for X
+    loss.backward()
+    grads = img.grad
+
+    dx = learning_rate * grads
+
+    # update X_fooling
+    img.data += dx
+
+    # zero the gradients to prevent accumulation
+    img.grad.zero_()
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ########################################################################

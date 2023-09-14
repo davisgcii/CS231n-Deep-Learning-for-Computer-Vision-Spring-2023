@@ -38,7 +38,15 @@ class PositionalEncoding(nn.Module):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        # create a vector of positions
+        position = torch.arange(max_len, dtype=torch.float).unsqueeze(1)
+
+        # terms that decrease exponentially per the paper
+        div = torch.exp(torch.arange(0., embed_dim, 2.) * -(math.log(10000.0) / embed_dim))
+
+        # apply sin and cos for 2i and 2i+1 positions
+        pe[:, :, 0::2] = torch.sin(position * div)
+        pe[:, :, 1::2] = torch.cos(position * div)
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -70,7 +78,11 @@ class PositionalEncoding(nn.Module):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        # add the positional encoding to the input sequence
+        output = x + self.pe[:, :S, :]
+
+        # incorporate dropout
+        output = self.dropout(output)
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -165,7 +177,38 @@ class MultiHeadAttention(nn.Module):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        # reshape into number of heads
+        key = self.key(key)
+        query = self.query(query)
+        value = self.value(value)
+
+        # reshape (N, T, E) -> (N, H, T, E / H)
+        key = key.view(N, T, self.n_head, self.head_dim).transpose(1, 2)
+        value = value.view(N, T, self.n_head, self.head_dim).transpose(1, 2)
+        
+        # reshape (N, S, E) -> (N, H, S, E / H)
+        query = query.view(N, S, self.n_head, self.head_dim).transpose(1, 2)
+
+        # calculate the alignment scores - (N, H, S, E/H) @ (N, H, E/H, T)
+        # -> (N, H, S, T)
+        # don't forget to divide by sqrt of E/H
+        scores = (query @ key.transpose(-2, -1)) / math.sqrt(self.head_dim)
+
+        if attn_mask is not None:
+          # if there is a mask, set the masked scores to -inf
+          scores = scores.masked_fill(attn_mask==0, -float('inf'))
+
+        # calculate the attention weights and output
+        attn_weights = F.softmax(scores, dim=-1)
+        
+        y = self.attn_drop(attn_weights) @ value # (N, H, S, E/H)
+
+        # reshape and pass through the projection layer
+        y = y.transpose(1, 2)
+        y = y.reshape(N, S, E)
+        output = self.proj(y)
+
+
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################

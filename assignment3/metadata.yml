@@ -1,0 +1,12 @@
+---
+:id: 182207781
+:submitters:
+- :name: George Charles Davis
+  :email: gcdavis@stanford.edu
+:created_at: !ruby/object:ActiveSupport::TimeWithZone
+  utc: 2023-06-01 03:25:23.974914000 Z
+  zone: !ruby/object:ActiveSupport::TimeZone
+    name: America/Los_Angeles
+  time: 2023-05-31 20:25:23.974914000 Z
+:status: processed
+:score: 68.0
